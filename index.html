@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🌍 SOULVERSE VOXEL SANDBOX | PLT Press</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; height: 100vh; width: 100vw; }
+        canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        
+        /* Crosshair */
+        .crosshair {
+            position: fixed; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px; height: 20px;
+            z-index: 100; pointer-events: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute; background: rgba(255, 170, 102, 0.8);
+        }
+        .crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        .crosshair::after { height: 2px; width: 100%; top: 50%; transform: translateY(-50%); }
+        
+        /* UI Overlay */
+        .ui { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 10; }
+        .ui > * { pointer-events: auto; }
+        
+        /* Top Bar */
+        .top-bar {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            padding: 15px; gap: 15px;
+        }
+        
+        .panel {
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 170, 102, 0.5);
+            padding: 15px;
+            color: #ffdd99;
+            font-size: 12px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        
+        .left-panel { width: 260px; }
+        .right-panel { width: 280px; }
+        
+        .panel h3 {
+            color: #ffaa66; margin-bottom: 10px; font-size: 14px;
+            border-bottom: 1px solid rgba(255, 170, 102, 0.3);
+            padding-bottom: 8px;
+        }
+        
+        /* Stats */
+        .stat-row { display: flex; justify-content: space-between; margin: 6px 0; }
+        .stat-label { color: #aaa; }
+        .stat-value { color: #ffaa66; font-weight: bold; }
+        
+        /* Resource Bar */
+        .resource-bar { margin: 10px 0; }
+        .bar-label { font-size: 11px; color: #aaa; margin-bottom: 4px; }
+        .bar-bg {
+            height: 8px; background: rgba(42, 42, 58, 0.8);
+            border-radius: 4px; overflow: hidden;
+        }
+        .bar-fill {
+            height: 100%; width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+        .bar-fill.profit { background: linear-gradient(90deg, #ff8844, #ffaa66); }
+        .bar-fill.love { background: linear-gradient(90deg, #ff66aa, #ff88cc); }
+        .bar-fill.tax { background: linear-gradient(90deg, #88aaff, #6699ff); }
+        .bar-fill.energy { background: linear-gradient(90deg, #66ffaa, #88ffcc); }
+        
+        /* Soul List */
+        .soul-entry {
+            background: rgba(255, 170, 102, 0.1);
+            border-radius: 12px;
+            padding: 10px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        .soul-entry:hover {
+            background: rgba(255, 170, 102, 0.25);
+            border-color: rgba(255, 170, 102, 0.5);
+            transform: translateX(5px);
+        }
+        .soul-name { font-weight: bold; color: #ffdd99; margin-bottom: 4px; }
+        .soul-role { font-size: 10px; color: #888; }
+        .soul-plt { font-size: 10px; margin-top: 6px; }
+        .soul-plt span { margin-right: 8px; }
+        
+        /* Hotbar */
+        .hotbar {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 10px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 170, 102, 0.4);
+            z-index: 50;
+        }
+        
+        .hotbar-slot {
+            width: 50px; height: 50px;
+            background: rgba(42, 42, 58, 0.6);
+            border: 2px solid rgba(255, 170, 102, 0.3);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+        
+        .hotbar-slot:hover { transform: scale(1.05); }
+        .hotbar-slot.active {
+            border-color: #ffaa66;
+            box-shadow: 0 0 15px rgba(255, 170, 102, 0.5);
+            background: rgba(255, 170, 102, 0.2);
+        }
+        
+        .slot-icon { font-size: 20px; }
+        .slot-count {
+            position: absolute; bottom: 2px; right: 4px;
+            font-size: 10px; color: #fff; font-weight: bold;
+        }
+        .slot-key {
+            position: absolute; top: 2px; left: 4px;
+            font-size: 9px; color: #888;
+        }
+        
+        /* Buttons */
+        .btn {
+            background: linear-gradient(135deg, #ffaa66, #ff8844);
+            border: none;
+            color: #010105;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 11px;
+            transition: all 0.2s;
+            margin: 4px 0;
+        }
+        .btn:hover {
+            transform: scale(1.03);
+            box-shadow: 0 0 12px rgba(255, 170, 102, 0.6);
+        }
+        .btn-secondary {
+            background: rgba(42, 42, 58, 0.8);
+            color: #ffaa66;
+            border: 1px solid rgba(255, 170, 102, 0.5);
+        }
+        .btn-full { width: 100%; }
+        
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 26, 0.95);
+            backdrop-filter: blur(20px);
+            border: 2px solid #ffaa66;
+            border-radius: 24px;
+            padding: 24px;
+            z-index: 200;
+            min-width: 340px;
+            max-width: 90vw;
+            max-height: 85vh;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 0 40px rgba(255, 170, 102, 0.3);
+        }
+        .modal h3 { color: #ffaa66; margin-bottom: 16px; }
+        .close-modal {
+            float: right; background: none; border: none;
+            color: #ffaa66; font-size: 24px; cursor: pointer;
+            line-height: 1;
+        }
+        
+        /* Form Elements */
+        input, select, textarea {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 170, 102, 0.5);
+            border-radius: 12px;
+            padding: 10px 14px;
+            color: #ffdd99;
+            font-family: monospace;
+            font-size: 12px;
+            width: 100%;
+            margin: 8px 0;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #ffaa66;
+            box-shadow: 0 0 10px rgba(255, 170, 102, 0.3);
+        }
+        
+        /* PLT Sliders */
+        .plt-sliders { display: flex; gap: 12px; margin: 12px 0; }
+        .plt-slider { flex: 1; text-align: center; }
+        .plt-slider label { display: block; font-size: 10px; color: #aaa; margin-bottom: 6px; }
+        .plt-slider input[type="range"] { width: 100%; }
+        .plt-slider .val { font-size: 11px; color: #ffaa66; margin-top: 4px; display: block; }
+        
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 80px; right: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 170, 102, 0.5);
+            border-radius: 16px;
+            padding: 12px 20px;
+            color: #ffdd99;
+            font-size: 12px;
+            z-index: 300;
+            transform: translateX(150%);
+            transition: transform 0.3s ease;
+        }
+        .notification.show { transform: translateX(0); }
+        
+        /* Loading Screen */
+        .loading {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s;
+        }
+        .loading h1 { color: #ffaa66; font-size: 28px; margin-bottom: 20px; }
+        .loading-bar {
+            width: 300px; height: 6px;
+            background: rgba(42, 42, 58, 0.8);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .loading-fill {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #ff8844, #ffaa66);
+            transition: width 0.3s;
+        }
+        .loading-text {
+            margin-top: 15px; color: #666; font-size: 11px;
+        }
+        
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            bottom: 100px; left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            padding: 12px;
+            color: #888;
+            font-size: 10px;
+            z-index: 40;
+        }
+        .instructions kbd {
+            background: rgba(255, 170, 102, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #ffaa66;
+        }
+        
+        footer {
+            position: absolute;
+            bottom: 10px; left: 0; right: 0;
+            text-align: center;
+            font-size: 9px;
+            color: #555;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="voxelCanvas"></canvas>
+    
+    <!-- Crosshair -->
+    <div class="crosshair"></div>
+    
+    <!-- UI Overlay -->
+    <div class="ui">
+        <div class="top-bar">
+            <!-- Left Panel - Souls & Stats -->
+            <div class="panel left-panel">
+                <h3>👤 PLAYER</h3>
+                <div class="stat-row"><span class="stat-label">Position</span><span class="stat-value" id="posStat">0, 0, 0</span></div>
+                <div class="stat-row"><span class="stat-label">Chunks</span><span class="stat-value" id="chunkStat">0</span></div>
+                <div class="stat-row"><span class="stat-label">FPS</span><span class="stat-value" id="fpsStat">0</span></div>
+                
+                <h3 style="margin-top: 15px;">💰 PLT RESOURCES</h3>
+                <div class="resource-bar">
+                    <div class="bar-label">💰 Profit Energy</div>
+                    <div class="bar-bg"><div class="bar-fill profit" id="profitBar"></div></div>
+                </div>
+                <div class="resource-bar">
+                    <div class="bar-label">❤️ Love Energy</div>
+                    <div class="bar-bg"><div class="bar-fill love" id="loveBar"></div></div>
+                </div>
+                <div class="resource-bar">
+                    <div class="bar-label">⚖️ Tax Energy</div>
+                    <div class="bar-bg"><div class="bar-fill tax" id="taxBar"></div></div>
+                </div>
+                <div class="resource-bar">
+                    <div class="bar-label">⚡ Realm Energy</div>
+                    <div class="bar-bg"><div class="bar-fill energy" id="energyBar"></div></div>
+                </div>
+                
+                <h3 style="margin-top: 15px;">🌀 YOUR SOULS</h3>
+                <div id="soulList"></div>
+                <button id="forgeBtn" class="btn btn-secondary btn-full">⚔️ Forge Soul</button>
+            </div>
+            
+            <!-- Right Panel - World Info -->
+            <div class="panel right-panel">
+                <h3>🌍 WORLD INFO</h3>
+                <div class="stat-row"><span class="stat-label">Seed</span><span class="stat-value" id="seedStat">0</span></div>
+                <div class="stat-row"><span class="stat-label">Blocks Placed</span><span class="stat-value" id="blocksStat">0</span></div>
+                <div class="stat-row"><span class="stat-label">Souls Active</span><span class="stat-value" id="activeSoulsStat">0</span></div>
+                
+                <h3 style="margin-top: 15px;">📦 INVENTORY</h3>
+                <div id="inventoryList" style="font-size: 11px;"></div>
+                
+                <h3 style="margin-top: 15px;">🔧 ACTIONS</h3>
+                <button id="saveBtn" class="btn btn-secondary btn-full">💾 Save World</button>
+                <button id="loadBtn" class="btn btn-secondary btn-full">📂 Load World</button>
+                <button id="clearBtn" class="btn btn-secondary btn-full">🗑️ Clear World</button>
+                <button id="soulsBtn" class="btn btn-full" style="margin-top: 10px;">🌀 Soulverse</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hotbar -->
+    <div class="hotbar" id="hotbar"></div>
+    
+    <!-- Instructions -->
+    <div class="instructions">
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move &nbsp;|&nbsp;
+        <kbd>SPACE</kbd> Jump &nbsp;|&nbsp;
+        <kbd>SHIFT</kbd> Sprint &nbsp;|&nbsp;
+        <kbd>MOUSE</kbd> Look &nbsp;|&nbsp;
+        <kbd>LMB</kbd> Break &nbsp;|&nbsp;
+        <kbd>RMB</kbd> Place &nbsp;|&nbsp;
+        <kbd>1-9</kbd> Select Block
+    </div>
+    
+    <!-- Forge Soul Modal -->
+    <div id="forgeModal" class="modal">
+        <button class="close-modal">&times;</button>
+        <h3>⚔️ Forge Soul</h3>
+        <input id="soulName" placeholder="Soul Name">
+        <input id="soulRole" placeholder="Role (e.g., Builder, Warrior, Merchant)">
+        <textarea id="soulEssence" placeholder="Essence description..." rows="3"></textarea>
+        <div class="plt-sliders">
+            <div class="plt-slider">
+                <label>💰 Profit</label>
+                <input type="range" id="profitSlider" min="0" max="100" value="33">
+                <span class="val" id="profitVal">33%</span>
+            </div>
+            <div class="plt-slider">
+                <label>❤️ Love</label>
+                <input type="range" id="loveSlider" min="0" max="100" value="33">
+                <span class="val" id="loveVal">33%</span>
+            </div>
+            <div class="plt-slider">
+                <label>⚖️ Tax</label>
+                <input type="range" id="taxSlider" min="0" max="100" value="34">
+                <span class="val" id="taxVal">34%</span>
+            </div>
+        </div>
+        <button id="confirmForge" class="btn btn-full">Forge Soul</button>
+    </div>
+    
+    <!-- Soulverse Modal -->
+    <div id="soulverseModal" class="modal">
+        <button class="close-modal">&times;</button>
+        <h3>🌀 Soulverse Integration</h3>
+        <p style="color: #888; font-size: 12px; margin-bottom: 15px;">
+            Your souls can influence the voxel world. Higher PLT values generate corresponding terrain types.
+        </p>
+        <div id="soulverseIntegration"></div>
+        <button id="syncSoulsBtn" class="btn btn-full" style="margin-top: 15px;">🔄 Sync with Soulverse</button>
+    </div>
+    
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+    
+    <!-- Loading Screen -->
+    <div id="loading" class="loading">
+        <h1>🌍 SOULVERSE VOXEL</h1>
+        <div class="loading-bar"><div class="loading-fill" id="loadingFill"></div></div>
+        <div class="loading-text" id="loadingText">Initializing...</div>
+    </div>
+    
+    <footer>
+        Soulverse Voxel Sandbox v1.0 | PLT Press | Crafted for Craig Jones (Morpheus)
+    </footer>
+
+    <!-- Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        // ============================================================
+        // SOULVERSE VOXEL SANDBOX
+        // A voxel sandbox game integrated with the Soulverse soul system
+        // ============================================================
+
+        // --- Configuration ---
+        const CONFIG = {
+            chunkSize: 16,
+            chunkHeight: 64,
+            renderDistance: 4,
+            mouseSensitivity: 0.002,
+            playerSpeed: 5,
+            playerSprint: 8,
+            playerJump: 8,
+            gravity: 25,
+            reach: 5,
+            seed: Date.now()
+        };
+
+        // --- Block Types ---
+        const BLOCKS = {
+            AIR: 0,
+            GRASS: 1,
+            DIRT: 2,
+            STONE: 3,
+            SAND: 4,
+            WATER: 5,
+            WOOD: 6,
+            LEAVES: 7,
+            PROFIT_ORE: 8,
+            LOVE_ORE: 9,
+            TAX_ORE: 10,
+            SOUL_STONE: 11,
+            BEDROCK: 99
+        };
+
+        const BLOCK_INFO = {
+            [BLOCKS.GRASS]: { name: 'Grass', color: '#4a8f3a', icon: '🟩' },
+            [BLOCKS.DIRT]: { name: 'Dirt', color: '#6b4423', icon: '🟫' },
+            [BLOCKS.STONE]: { name: 'Stone', color: '#666666', icon: '⬜' },
+            [BLOCKS.SAND]: { name: 'Sand', color: '#d4c685', icon: '🟨' },
+            [BLOCKS.WATER]: { name: 'Water', color: '#4488aa', icon: '💧', transparent: true },
+            [BLOCKS.WOOD]: { name: 'Wood', color: '#5c3a21', icon: '🪵' },
+            [BLOCKS.LEAVES]: { name: 'Leaves', color: '#2d5a27', icon: '🍃', transparent: true },
+            [BLOCKS.PROFIT_ORE]: { name: 'Profit Ore', color: '#ff8844', icon: '💰' },
+            [BLOCKS.LOVE_ORE]: { name: 'Love Ore', color: '#ff66aa', icon: '❤️' },
+            [BLOCKS.TAX_ORE]: { name: 'Tax Ore', color: '#6699ff', icon: '⚖️' },
+            [BLOCKS.SOUL_STONE]: { name: 'Soul Stone', color: '#aa66ff', icon: '🔮' },
+            [BLOCKS.BEDROCK]: { name: 'Bedrock', color: '#222222', icon: '⬛' }
+        };
+
+        // --- Game State ---
+        const state = {
+            souls: [],
+            playerPLT: { profit: 1000, love: 1000, tax: 1000 },
+            realmEnergy: 100,
+            chunks: new Map(),
+            blocksPlaced: 0,
+            inventory: {},
+            selectedSlot: 0,
+            hotbar: [BLOCKS.GRASS, BLOCKS.DIRT, BLOCKS.STONE, BLOCKS.WOOD, BLOCKS.LEAVES, BLOCKS.PROFIT_ORE, BLOCKS.LOVE_ORE, BLOCKS.TAX_ORE, BLOCKS.SOUL_STONE]
+        };
+
+        // --- Simplex Noise Implementation ---
+        class SimplexNoise {
+            constructor(seed = Math.random()) {
+                this.p = new Uint8Array(256);
+                for (let i = 0; i < 256; i++) this.p[i] = i;
+                
+                // Shuffle with seed
+                let s = seed;
+                for (let i = 255; i > 0; i--) {
+                    s = (s * 16807) % 2147483647;
+                    const j = s % (i + 1);
+                    [this.p[i], this.p[j]] = [this.p[j], this.p[i]];
+                }
+                
+                this.perm = new Uint8Array(512);
+                for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255];
+            }
+
+            noise2D(x, y) {
+                const F2 = 0.5 * (Math.sqrt(3) - 1);
+                const G2 = (3 - Math.sqrt(3)) / 6;
+                
+                const s = (x + y) * F2;
+                const i = Math.floor(x + s);
+                const j = Math.floor(y + s);
+                const t = (i + j) * G2;
+                const X0 = i - t;
+                const Y0 = j - t;
+                const x0 = x - X0;
+                const y0 = y - Y0;
+
+                const i1 = x0 > y0 ? 1 : 0;
+                const j1 = x0 > y0 ? 0 : 1;
+                const x1 = x0 - i1 + G2;
+                const y1 = y0 - j1 + G2;
+                const x2 = x0 - 1 + 2 * G2;
+                const y2 = y0 - 1 + 2 * G2;
+
+                const ii = i & 255;
+                const jj = j & 255;
+
+                const grad = (hash, x, y) => {
+                    const h = hash & 7;
+                    const u = h < 4 ? x : y;
+                    const v = h < 4 ? y : x;
+                    return ((h & 1) ? -u : u) + ((h & 2) ? -2 * v : 2 * v);
+                };
+
+                let n0 = 0, n1 = 0, n2 = 0;
+                let t0 = 0.5 - x0 * x0 - y0 * y0;
+                if (t0 >= 0) {
+                    t0 *= t0;
+                    n0 = t0 * t0 * grad(this.perm[ii + this.perm[jj]], x0, y0);
+                }
+                let t1 = 0.5 - x1 * x1 - y1 * y1;
+                if (t1 >= 0) {
+                    t1 *= t1;
+                    n1 = t1 * t1 * grad(this.perm[ii + i1 + this.perm[jj + j1]], x1, y1);
+                }
+                let t2 = 0.5 - x2 * x2 - y2 * y2;
+                if (t2 >= 0) {
+                    t2 *= t2;
+                    n2 = t2 * t2 * grad(this.perm[ii + 1 + this.perm[jj + 1]], x2, y2);
+                }
+
+                return 70 * (n0 + n1 + n2);
+            }
+        }
+
+        const noise = new SimplexNoise(CONFIG.seed);
+
+        // --- Three.js Setup ---
+        const canvas = document.getElementById('voxelCanvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0x87ceeb, CONFIG.renderDistance * CONFIG.chunkSize - 10, CONFIG.renderDistance * CONFIG.chunkSize);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(100, 100, 50);
+        scene.add(directionalLight);
+
+        // Controls
+        const controls = new PointerLockControls(camera, document.body);
+
+        // --- Chunk Class ---
+        class Chunk {
+            constructor(chunkX, chunkZ) {
+                this.chunkX = chunkX;
+                this.chunkZ = chunkZ;
+                this.blocks = new Uint8Array(CONFIG.chunkSize * CONFIG.chunkHeight * CONFIG.chunkSize);
+                this.mesh = null;
+                this.dirty = true;
+            }
+
+            getIndex(x, y, z) {
+                return x + z * CONFIG.chunkSize + y * CONFIG.chunkSize * CONFIG.chunkSize;
+            }
+
+            getBlock(x, y, z) {
+                if (x < 0 || x >= CONFIG.chunkSize || y < 0 || y >= CONFIG.chunkHeight || z < 0 || z >= CONFIG.chunkSize) return BLOCKS.AIR;
+                return this.blocks[this.getIndex(x, y, z)];
+            }
+
+            setBlock(x, y, z, id) {
+                if (x < 0 || x >= CONFIG.chunkSize || y < 0 || y >= CONFIG.chunkHeight || z < 0 || z >= CONFIG.chunkSize) return false;
+                this.blocks[this.getIndex(x, y, z)] = id;
+                this.dirty = true;
+                return true;
+            }
+
+            getKey() {
+                return `${this.chunkX},${this.chunkZ}`;
+            }
+        }
+
+        // --- Chunk Manager ---
+        class ChunkManager {
+            constructor() {
+                this.chunks = new Map();
+            }
+
+            getChunk(chunkX, chunkZ) {
+                const key = `${chunkX},${chunkZ}`;
+                if (!this.chunks.has(key)) {
+                    const chunk = new Chunk(chunkX, chunkZ);
+                    this.generateChunk(chunk);
+                    this.chunks.set(key, chunk);
+                }
+                return this.chunks.get(key);
+            }
+
+            generateChunk(chunk) {
+                for (let x = 0; x < CONFIG.chunkSize; x++) {
+                    for (let z = 0; z < CONFIG.chunkSize; z++) {
+                        const worldX = chunk.chunkX * CONFIG.chunkSize + x;
+                        const worldZ = chunk.chunkZ * CONFIG.chunkSize + z;
+
+                        // Multi-octave noise for terrain
+                        let amplitude = 1, frequency = 0.02, height = 0, maxValue = 0;
+                        for (let o = 0; o < 4; o++) {
+                            height += noise.noise2D(worldX * frequency, worldZ * frequency) * amplitude;
+                            maxValue += amplitude;
+                            amplitude *= 0.5;
+                            frequency *= 2;
+                        }
+                        const terrainHeight = Math.floor((height / maxValue + 1) * 15 + 20);
+
+                        for (let y = 0; y < CONFIG.chunkHeight; y++) {
+                            let block = BLOCKS.AIR;
+
+                            if (y === 0) {
+                                block = BLOCKS.BEDROCK;
+                            } else if (y < terrainHeight - 4) {
+                                block = BLOCKS.STONE;
+                                // Ore generation based on PLT
+                                const oreNoise = noise.noise2D(worldX * 0.05, y * 0.1);
+                                if (oreNoise > 0.95 && y < 15) {
+                                    block = BLOCKS.PROFIT_ORE;
+                                } else if (oreNoise > 0.93 && y < 20) {
+                                    block = BLOCKS.LOVE_ORE;
+                                } else if (oreNoise > 0.91 && y < 25) {
+                                    block = BLOCKS.TAX_ORE;
+                                }
+                            } else if (y < terrainHeight) {
+                                block = BLOCKS.DIRT;
+                            } else if (y === terrainHeight) {
+                                if (terrainHeight < 22) {
+                                    block = BLOCKS.SAND;
+                                } else {
+                                    block = BLOCKS.GRASS;
+                                }
+                            }
+
+                            chunk.setBlock(x, y, z, block);
+                        }
+
+                        // Trees
+                        if (chunk.getBlock(x, terrainHeight, z) === BLOCKS.GRASS) {
+                            const treeNoise = noise.noise2D(worldX * 0.1, worldZ * 0.1);
+                            if (treeNoise > 0.7) {
+                                this.generateTree(chunk, x, terrainHeight + 1, z);
+                            }
+                        }
+                    }
+                }
+            }
+
+            generateTree(chunk, x, y, z) {
+                const treeHeight = 4 + Math.floor(noise.noise2D(x, z) * 3);
+                
+                // Trunk
+                for (let ty = 0; ty < treeHeight; ty++) {
+                    chunk.setBlock(x, y + ty, z, BLOCKS.WOOD);
+                }
+
+                // Leaves
+                for (let lx = -2; lx <= 2; lx++) {
+                    for (let lz = -2; lz <= 2; lz++) {
+                        for (let ly = treeHeight - 2; ly <= treeHeight + 1; ly++) {
+                            if (Math.abs(lx) + Math.abs(lz) + Math.abs(ly - treeHeight) < 4) {
+                                if (chunk.getBlock(x + lx, y + ly, z + lz) === BLOCKS.AIR) {
+                                    chunk.setBlock(x + lx, y + ly, z + lz, BLOCKS.LEAVES);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            update(playerX, playerZ) {
+                const playerChunkX = Math.floor(playerX / CONFIG.chunkSize);
+                const playerChunkZ = Math.floor(playerZ / CONFIG.chunkSize);
+
+                // Load chunks around player
+                for (let dx = -CONFIG.renderDistance; dx <= CONFIG.renderDistance; dx++) {
+                    for (let dz = -CONFIG.renderDistance; dz <= CONFIG.renderDistance; dz++) {
+                        const chunkX = playerChunkX + dx;
+                        const chunkZ = playerChunkZ + dz;
+                        this.getChunk(chunkX, chunkZ);
+                    }
+                }
+
+                // Unload distant chunks
+                for (const [key, chunk] of this.chunks) {
+                    const dx = chunk.chunkX - playerChunkX;
+                    const dz = chunk.chunkZ - playerChunkZ;
+                    if (dx * dx + dz * dz > (CONFIG.renderDistance + 2) ** 2) {
+                        if (chunk.mesh) {
+                            scene.remove(chunk.mesh);
+                            chunk.mesh.geometry.dispose();
+                        }
+                        this.chunks.delete(key);
+                    }
+                }
+
+                // Rebuild meshes
+                for (const chunk of this.chunks.values()) {
+                    if (chunk.dirty) {
+                        this.rebuildMesh(chunk);
+                    }
+                }
+            }
+
+            rebuildMesh(chunk) {
+                if (chunk.mesh) {
+                    scene.remove(chunk.mesh);
+                    chunk.mesh.geometry.dispose();
+                }
+
+                const positions = [];
+                const normals = [];
+                const colors = [];
+                const indices = [];
+
+                for (let y = 0; y < CONFIG.chunkHeight; y++) {
+                    for (let z = 0; z < CONFIG.chunkSize; z++) {
+                        for (let x = 0; x < CONFIG.chunkSize; x++) {
+                            const block = chunk.getBlock(x, y, z);
+                            if (block === BLOCKS.AIR) continue;
+
+                            const worldX = chunk.chunkX * CONFIG.chunkSize + x;
+                            const worldZ = chunk.chunkZ * CONFIG.chunkSize + z;
+
+                            // Check each face
+                            const faces = [
+                                { dir: [0, 1, 0], name: 'up' },
+                                { dir: [0, -1, 0], name: 'down' },
+                                { dir: [1, 0, 0], name: 'right' },
+                                { dir: [-1, 0, 0], name: 'left' },
+                                { dir: [0, 0, 1], name: 'front' },
+                                { dir: [0, 0, -1], name: 'back' }
+                            ];
+
+                            for (const face of faces) {
+                                const nx = x + face.dir[0];
+                                const ny = y + face.dir[1];
+                                const nz = z + face.dir[2];
+                                const neighbor = chunk.getBlock(nx, ny, nz);
+
+                                if (neighbor === BLOCKS.AIR || BLOCK_INFO[neighbor]?.transparent) {
+                                    this.addFace(positions, normals, colors, indices, x, y, z, face.dir, block);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.Float32Array(positions));
+                geometry.setAttribute('normal', new THREE.Float32Array(normals));
+                geometry.setAttribute('color', new THREE.Float32Array(colors));
+                geometry.setIndex(indices);
+
+                const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(chunk.chunkX * CONFIG.chunkSize, 0, chunk.chunkZ * CONFIG.chunkSize);
+                scene.add(mesh);
+                chunk.mesh = mesh;
+                chunk.dirty = false;
+            }
+
+            addFace(positions, normals, colors, indices, x, y, z, dir, block) {
+                const blockInfo = BLOCK_INFO[block];
+                const color = new THREE.Color(blockInfo?.color || '#ff00ff');
+
+                const vertices = [
+                    // Up
+                    [[0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]],
+                    // Down
+                    [[0, 0, 1], [1, 0, 1], [1, 0, 0], [0, 0, 0]],
+                    // Right
+                    [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]],
+                    // Left
+                    [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]],
+                    // Front
+                    [[0, 0, 1], [0, 0, 0], [0, 1, 0], [0, 1, 1]],
+                    // Back
+                    [[1, 0, 0], [1, 0, 1], [1, 1, 1], [1, 1, 0]]
+                ];
+
+                const faceIndex = dir[1] === 1 ? 0 : dir[1] === -1 ? 1 : dir[0] === 1 ? 2 : dir[0] === -1 ? 3 : dir[2] === 1 ? 4 : 5;
+                const v = vertices[faceIndex];
+
+                const baseIndex = positions.length / 3;
+                for (const vert of v) {
+                    positions.push(x + vert[0], y + vert[1], z + vert[2]);
+                    normals.push(...dir);
+                    colors.push(color.r, color.g, color.b);
+                }
+
+                indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
+            }
+
+            getBlock(worldX, worldY, worldZ) {
+                const chunkX = Math.floor(worldX / CONFIG.chunkSize);
+                const chunkZ = Math.floor(worldZ / CONFIG.chunkSize);
+                const key = `${chunkX},${chunkZ}`;
+                const chunk = this.chunks.get(key);
+                if (!chunk) return BLOCKS.AIR;
+
+                const localX = ((worldX % CONFIG.chunkSize) + CONFIG.chunkSize) % CONFIG.chunkSize;
+                const localZ = ((worldZ % CONFIG.chunkSize) + CONFIG.chunkSize) % CONFIG.chunkSize;
+                return chunk.getBlock(localX, worldY, localZ);
+            }
+
+            setBlock(worldX, worldY, worldZ, block) {
+                const chunkX = Math.floor(worldX / CONFIG.chunkSize);
+                const chunkZ = Math.floor(worldZ / CONFIG.chunkSize);
+                const key = `${chunkX},${chunkZ}`;
+                const chunk = this.chunks.get(key);
+                if (!chunk) return false;
+
+                const localX = ((worldX % CONFIG.chunkSize) + CONFIG.chunkSize) % CONFIG.chunkSize;
+                const localZ = ((worldZ % CONFIG.chunkSize) + CONFIG.chunkSize) % CONFIG.chunkSize;
+                const success = chunk.setBlock(localX, worldY, localZ, block);
+                if (success) {
+                    state.blocksPlaced++;
+                    // Mark adjacent chunks dirty if on border
+                    if (localX === 0) this.getChunk(chunkX - 1, chunkZ).dirty = true;
+                    if (localX === CONFIG.chunkSize - 1) this.getChunk(chunkX + 1, chunkZ).dirty = true;
+                    if (localZ === 0) this.getChunk(chunkX, chunkZ - 1).dirty = true;
+                    if (localZ === CONFIG.chunkSize - 1) this.getChunk(chunkX, chunkZ + 1).dirty = true;
+                }
+                return success;
+            }
+
+            getCount() {
+                return this.chunks.size;
+            }
+        }
+
+        const chunkManager = new ChunkManager();
+
+        // --- Player Controller ---
+        const player = {
+            position: new THREE.Vector3(0, 50, 0),
+            velocity: new THREE.Vector3(),
+            onGround: false,
+            height: 1.7,
+            width: 0.3
+        };
+
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.code] = true);
+        document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function updatePlayer(deltaTime) {
+            if (!controls.isLocked) return;
+
+            const speed = keys['ShiftLeft'] ? CONFIG.playerSprint : CONFIG.playerSpeed;
+            const direction = new THREE.Vector3();
+
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            right.y = 0;
+            right.normalize();
+
+            if (keys['KeyW']) direction.add(forward);
+            if (keys['KeyS']) direction.sub(forward);
+            if (keys['KeyD']) direction.add(right);
+            if (keys['KeyA']) direction.sub(right);
+
+            if (direction.length() > 0) direction.normalize();
+
+            // Horizontal movement
+            player.velocity.x = direction.x * speed;
+            player.velocity.z = direction.z * speed;
+
+            // Gravity
+            player.velocity.y -= CONFIG.gravity * deltaTime;
+
+            // Jump
+            if (keys['Space'] && player.onGround) {
+                player.velocity.y = CONFIG.playerJump;
+                player.onGround = false;
+            }
+
+            // Apply movement with collision
+            const newPos = player.position.clone();
+
+            // X collision
+            newPos.x += player.velocity.x * deltaTime;
+            if (checkCollision(newPos)) {
+                player.velocity.x = 0;
+                newPos.x = player.position.x;
+            }
+
+            // Z collision
+            newPos.z += player.velocity.z * deltaTime;
+            if (checkCollision(newPos)) {
+                player.velocity.z = 0;
+                newPos.z = player.position.z;
+            }
+
+            // Y collision
+            newPos.y += player.velocity.y * deltaTime;
+            if (checkCollision(newPos)) {
+                if (player.velocity.y < 0) player.onGround = true;
+                player.velocity.y = 0;
+                newPos.y = player.position.y;
+            } else {
+                player.onGround = false;
+            }
+
+            player.position.copy(newPos);
+            camera.position.copy(player.position);
+            camera.position.y += player.height;
+
+            // Fall off world
+            if (player.position.y < -10) {
+                player.position.set(0, 50, 0);
+                player.velocity.set(0, 0, 0);
+            }
+        }
+
+        function checkCollision(pos) {
+            const minX = Math.floor(pos.x - player.width);
+            const maxX = Math.floor(pos.x + player.width);
+            const minY = Math.floor(pos.y);
+            const maxY = Math.floor(pos.y + player.height);
+            const minZ = Math.floor(pos.z - player.width);
+            const maxZ = Math.floor(pos.z + player.width);
+
+            for (let x = minX; x <= maxX; x++) {
+                for (let y = minY; y <= maxY; y++) {
+                    for (let z = minZ; z <= maxZ; z++) {
+                        const block = chunkManager.getBlock(x, y, z);
+                        if (block !== BLOCKS.AIR && !BLOCK_INFO[block]?.transparent) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // --- Raycasting for Block Interaction ---
+        const raycaster = new THREE.Raycaster();
+        let selectedBlock = null;
+
+        function updateRaycast() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            raycaster.far = CONFIG.reach;
+
+            // Simple raycast through chunks
+            const intersects = [];
+            for (const chunk of chunkManager.chunks.values()) {
+                if (chunk.mesh) {
+                    const hit = raycaster.intersectObject(chunk.mesh);
+                    if (hit.length > 0) {
+                        intersects.push({ ...hit[0], chunk });
+                    }
+                }
+            }
+
+            if (intersects.length > 0) {
+                intersects.sort((a, b) => a.distance - b.distance);
+                const hit = intersects[0];
+                const localPos = hit.point.clone().sub(hit.chunk.mesh.position);
+                const x = Math.floor(localPos.x);
+                const y = Math.floor(localPos.y);
+                const z = Math.floor(localPos.z);
+
+                selectedBlock = {
+                    x: hit.chunk.chunkX * CONFIG.chunkSize + x,
+                    y: y,
+                    z: hit.chunk.chunkZ * CONFIG.chunkSize + z,
+                    normal: hit.face.normal
+                };
+            } else {
+                selectedBlock = null;
+            }
+        }
+
+        // --- Input Handling ---
+        document.addEventListener('mousedown', (e) => {
+            if (!controls.isLocked) {
+                controls.lock();
+                return;
+            }
+
+            if (e.button === 0 && selectedBlock) {
+                // Break block
+                chunkManager.setBlock(selectedBlock.x, selectedBlock.y, selectedBlock.z, BLOCKS.AIR);
+                showNotification('Block broken');
+            } else if (e.button === 2 && selectedBlock) {
+                // Place block
+                const pos = new THREE.Vector3(
+                    selectedBlock.x + selectedBlock.normal.x,
+                    selectedBlock.y + selectedBlock.normal.y,
+                    selectedBlock.z + selectedBlock.normal.z
+                );
+
+                // Check not placing in player
+                const dx = Math.abs(pos.x + 0.5 - player.position.x);
+                const dz = Math.abs(pos.z + 0.5 - player.position.z);
+                const dy = Math.abs(pos.y + 0.5 - (player.position.y + player.height / 2));
+
+                if (dx > player.width || dz > player.width || dy > player.height) {
+                    chunkManager.setBlock(pos.x, pos.y, pos.z, state.hotbar[state.selectedSlot]);
+                    showNotification('Block placed');
+                }
+            }
+        });
+
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Hotbar selection
+        document.addEventListener('keydown', (e) => {
+            const num = parseInt(e.key);
+            if (num >= 1 && num <= 9) {
+                state.selectedSlot = num - 1;
+                updateHotbar();
+            }
+        });
+
+        // --- UI Functions ---
+        function updateHotbar() {
+            const hotbar = document.getElementById('hotbar');
+            hotbar.innerHTML = '';
+            state.hotbar.forEach((block, i) => {
+                const info = BLOCK_INFO[block];
+                const slot = document.createElement('div');
+                slot.className = `hotbar-slot ${i === state.selectedSlot ? 'active' : ''}`;
+                slot.innerHTML = `
+                    <span class="slot-key">${i + 1}</span>
+                    <span class="slot-icon">${info.icon}</span>
+                `;
+                slot.onclick = () => {
+                    state.selectedSlot = i;
+                    updateHotbar();
+                };
+                hotbar.appendChild(slot);
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('posStat').textContent = 
+                `${Math.floor(player.position.x)}, ${Math.floor(player.position.y)}, ${Math.floor(player.position.z)}`;
+            document.getElementById('chunkStat').textContent = chunkManager.getCount();
+            document.getElementById('blocksStat').textContent = state.blocksPlaced;
+            document.getElementById('activeSoulsStat').textContent = state.souls.length;
+            document.getElementById('seedStat').textContent = CONFIG.seed;
+
+            // PLT bars
+            const total = state.playerPLT.profit + state.playerPLT.love + state.playerPLT.tax;
+            document.getElementById('profitBar').style.width = `${(state.playerPLT.profit / total) * 100}%`;
+            document.getElementById('loveBar').style.width = `${(state.playerPLT.love / total) * 100}%`;
+            document.getElementById('taxBar').style.width = `${(state.playerPLT.tax / total) * 100}%`;
+            document.getElementById('energyBar').style.width = `${Math.min(100, state.realmEnergy)}%`;
+        }
+
+        function updateSoulList() {
+            const soulList = document.getElementById('soulList');
+            soulList.innerHTML = '';
+            state.souls.forEach((soul, i) => {
+                const entry = document.createElement('div');
+                entry.className = 'soul-entry';
+                entry.innerHTML = `
+                    <div class="soul-name">${soul.name}</div>
+                    <div class="soul-role">${soul.role}</div>
+                    <div class="soul-plt">
+                        <span>💰${soul.plt.profit}</span>
+                        <span>❤️${soul.plt.love}</span>
+                        <span>⚖️${soul.plt.tax}</span>
+                    </div>
+                `;
+                soulList.appendChild(entry);
+            });
+        }
+
+        function showNotification(message) {
+            const notif = document.getElementById('notification');
+            notif.textContent = message;
+            notif.classList.add('show');
+            setTimeout(() => notif.classList.remove('show'), 2000);
+        }
+
+        // --- Save/Load ---
+        function saveWorld() {
+            const data = {
+                seed: CONFIG.seed,
+                chunks: [],
+                player: {
+                    position: player.position.toArray(),
+                    plt: state.playerPLT,
+                    realmEnergy: state.realmEnergy
+                },
+                souls: state.souls,
+                blocksPlaced: state.blocksPlaced
+            };
+
+            for (const chunk of chunkManager.chunks.values()) {
+                // Only save modified chunks
+                if (chunk.dirty || chunk.blocks.some(b => b !== BLOCKS.AIR)) {
+                    data.chunks.push({
+                        x: chunk.chunkX,
+                        z: chunk.chunkZ,
+                        blocks: Array.from(chunk.blocks)
+                    });
+                }
+            }
+
+            localStorage.setItem('soulverseVoxelSave', JSON.stringify(data));
+            showNotification('World saved!');
+        }
+
+        function loadWorld() {
+            const saved = localStorage.getItem('soulverseVoxelSave');
+            if (!saved) {
+                showNotification('No save found');
+                return;
+            }
+
+            const data = JSON.parse(saved);
+            CONFIG.seed = data.seed;
+
+            // Clear chunks
+            for (const chunk of chunkManager.chunks.values()) {
+                if (chunk.mesh) scene.remove(chunk.mesh);
+            }
+            chunkManager.chunks.clear();
+
+            // Load chunks
+            data.chunks.forEach(c => {
+                const chunk = new Chunk(c.x, c.z);
+                chunk.blocks = new Uint8Array(c.blocks);
+                chunkManager.chunks.set(chunk.getKey(), chunk);
+                chunkManager.rebuildMesh(chunk);
+            });
+
+            // Load player
+            player.position.fromArray(data.player.position);
+            state.playerPLT = data.player.plt;
+            state.realmEnergy = data.player.realmEnergy;
+            state.souls = data.souls || [];
+            state.blocksPlaced = data.blocksPlaced || 0;
+
+            updateSoulList();
+            showNotification('World loaded!');
+        }
+
+        function clearWorld() {
+            for (const chunk of chunkManager.chunks.values()) {
+                if (chunk.mesh) scene.remove(chunk.mesh);
+            }
+            chunkManager.chunks.clear();
+            player.position.set(0, 50, 0);
+            state.blocksPlaced = 0;
+            showNotification('World cleared');
+        }
+
+        // --- Soul Forging ---
+        function forgeSoul(name, role, essence, plt) {
+            const soul = {
+                id: Date.now(),
+                name: name || 'Unknown Soul',
+                role: role || 'Wanderer',
+                essence: essence || '',
+                plt: { profit: plt.profit, love: plt.love, tax: plt.tax },
+                createdAt: new Date().toISOString()
+            };
+            state.souls.push(soul);
+            updateSoulList();
+            showNotification(`Soul forged: ${soul.name}`);
+        }
+
+        // --- Modal Handling ---
+        const forgeModal = document.getElementById('forgeModal');
+        const soulverseModal = document.getElementById('soulverseModal');
+
+        document.getElementById('forgeBtn').onclick = () => forgeModal.style.display = 'block';
+        document.getElementById('soulsBtn').onclick = () => soulverseModal.style.display = 'block';
+        document.getElementById('saveBtn').onclick = saveWorld;
+        document.getElementById('loadBtn').onclick = loadWorld;
+        document.getElementById('clearBtn').onclick = clearWorld;
+
+        document.querySelectorAll('.close-modal').forEach(btn => {
+            btn.onclick = () => {
+                forgeModal.style.display = 'none';
+                soulverseModal.style.display = 'none';
+            };
+        });
+
+        // PLT Sliders
+        const profitSlider = document.getElementById('profitSlider');
+        const loveSlider = document.getElementById('loveSlider');
+        const taxSlider = document.getElementById('taxSlider');
+
+        function updateSliders() {
+            let p = parseInt(profitSlider.value);
+            let l = parseInt(loveSlider.value);
+            let t = parseInt(taxSlider.value);
+
+            if (p + l + t !== 100) {
+                const total = p + l + t;
+                p = Math.round((p / total) * 100);
+                l = Math.round((l / total) * 100);
+                t = 100 - p - l;
+            }
+
+            document.getElementById('profitVal').textContent = `${p}%`;
+            document.getElementById('loveVal').textContent = `${l}%`;
+            document.getElementById('taxVal').textContent = `${t}%`;
+        }
+
+        profitSlider.oninput = updateSliders;
+        loveSlider.oninput = updateSliders;
+        taxSlider.oninput = updateSliders;
+
+        document.getElementById('confirmForge').onclick = () => {
+            const name = document.getElementById('soulName').value;
+            const role = document.getElementById('soulRole').value;
+            const essence = document.getElementById('soulEssence').value;
+            const plt = {
+                profit: parseInt(profitSlider.value),
+                love: parseInt(loveSlider.value),
+                tax: parseInt(taxSlider.value)
+            };
+            forgeSoul(name, role, essence, plt);
+            forgeModal.style.display = 'none';
+        };
+
+        // --- Game Loop ---
+        let lastTime = performance.now();
+        let frameCount = 0;
+        let fps = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const currentTime = performance.now();
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
+            lastTime = currentTime;
+
+            // FPS counter
+            frameCount++;
+            if (frameCount >= 30) {
+                fps = Math.round(1 / deltaTime);
+                document.getElementById('fpsStat').textContent = fps;
+                frameCount = 0;
+            }
+
+            updatePlayer(deltaTime);
+            chunkManager.update(player.position.x, player.position.z);
+            updateRaycast();
+            updateUI();
+
+            renderer.render(scene, camera);
+        }
+
+        // --- Initialization ---
+        async function init() {
+            const loadingFill = document.getElementById('loadingFill');
+            const loadingText = document.getElementById('loadingText');
+
+            // Loading progress
+            const steps = [
+                'Initializing Three.js...',
+                'Generating terrain...',
+                'Loading souls...',
+                'Ready!'
+            ];
+
+            for (let i = 0; i < steps.length; i++) {
+                loadingText.textContent = steps[i];
+                loadingFill.style.width = `${(i + 1) / steps.length * 100}%`;
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            // Try to load saved world
+            const saved = localStorage.getItem('soulverseVoxelSave');
+            if (saved) {
+                loadWorld();
+            }
+
+            // Hide loading screen
+            setTimeout(() => {
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
+            }, 500);
+
+            // Initial UI setup
+            updateHotbar();
+            updateSoulList();
+
+            // Start game loop
+            animate();
+
+            showNotification('🌍 Welcome to Soulverse Voxel Sandbox!');
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start
+        init();
+    </script>
+</body>
+</html>
