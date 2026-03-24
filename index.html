@@ -59,7 +59,7 @@
 
     let scene, camera, renderer, composer, controls;
     let chunkData = new Map(), chunkMeshes = new Map();
-    let player = { x:0, y:10, z:0, vY:0, onGround:true };
+    let player = { x:0, y:30, z:0, vY:0, onGround:true };
     let keys = { w:0,s:0,a:0,d:0,space:0,shift:0 };
     let mouseLocked = false, selectedBlock = BLOCK_TYPES.GRASS;
     let plt = { profit:100, love:100, tax:100, realm:100 }, souls = [];
@@ -120,7 +120,7 @@
         for (let dx=-RENDER_DIST;dx<=RENDER_DIST;dx++) for (let dz=-RENDER_DIST;dz<=RENDER_DIST;dz++) {
             const key = `${cx+dx},${cz+dz}`; if (!chunkData.has(key)) { chunkData.set(key, generateChunk(cx+dx, cz+dz)); const mesh = buildChunkMesh(cx+dx, cz+dz); if (mesh) { scene.add(mesh); chunkMeshes.set(key, mesh); } } else if (!chunkMeshes.has(key)) { const mesh = buildChunkMesh(cx+dx, cz+dz); if (mesh) { scene.add(mesh); chunkMeshes.set(key, mesh); } }
         }
-        for (let [key, mesh] of chunkMeshes) { const [cx, cz] = key.split(',').map(Number); if (Math.abs(cx-cx) > RENDER_DIST+1 || Math.abs(cz-cz) > RENDER_DIST+1) { scene.remove(mesh); chunkMeshes.delete(key); } }
+        for (let [key, mesh] of chunkMeshes) { const [cx, cz] = key.split(',').map(Number); if (Math.abs(cxk-cx) > RENDER_DIST+1 || Math.abs(czk-cz) > RENDER_DIST+1) { scene.remove(mesh); chunkMeshes.delete(key); } }
         document.getElementById('stats').innerText = `Souls:${souls.length} | PLT:${Math.floor(plt.profit)}/${Math.floor(plt.love)}/${Math.floor(plt.tax)} | Chunks:${chunkMeshes.size}`;
     }
 
