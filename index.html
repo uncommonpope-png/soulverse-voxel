@@ -35,6 +35,7 @@
     <p>MOUSE = Look | LMB = Break | RMB = Place</p>
     <p>1-5 = Select Block | Click = Lock Pointer</p>
     <button id="startBtn">▶️ CLICK TO PLAY</button>
+<script>document.getElementById("startBtn").addEventListener("click",function(){document.getElementById("start").style.display="none";document.getElementById("canvas").requestPointerLock();});</script>
 </div>
 
 <script type="importmap">
