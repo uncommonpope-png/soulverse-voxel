@@ -123,7 +123,7 @@ function init(){
     document.addEventListener('pointerlockchange',()=>{locked=document.pointerLockElement===document.getElementById('c');});
     document.addEventListener('mousemove',e=>{if(!locked)return;yaw-=e.movementX*0.002;pitch-=e.movementY*0.002;pitch=Math.max(-1.5,Math.min(1.5,pitch));camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;});
     document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Digit1')selectBlock(1);if(e.code==='Digit2')selectBlock(2);if(e.code==='Digit3')selectBlock(3);if(e.code==='Digit4')selectBlock(4);if(e.code==='Digit5')selectBlock(5);});
-    document.addEventListener('keyup',e=>keys[e.code]=false;
+    document.addEventListener('keyup',e=>keys[e.code]=false;});
     document.addEventListener('mousedown',e=>{if(!locked)return;if(e.button===0)breakBlock();if(e.button===2)placeBlock();});
     document.addEventListener('contextmenu',e=>e.preventDefault());
     document.querySelectorAll('.slot').forEach(s=>{s.addEventListener('click',()=>selectBlock(parseInt(s.dataset.block)));});
