@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>📱 SOULVERSE VOXEL – Mobile | PLT Press</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-user-select:none; }
+        body { background:#000; overflow:hidden; font-family:monospace; touch-action:none; }
+        canvas { display:block; width:100%; height:100%; }
+        .stats { position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); border-radius:12px; padding:6px 12px; font-size:10px; color:#ffaa66; z-index:20; pointer-events:none; }
+        .block-select { position:absolute; top:10px; right:10px; background:rgba(0,0,0,0.6); border-radius:30px; padding:5px; display:flex; gap:5px; z-index:20; pointer-events:auto; }
+        .block-option { width:40px; height:40px; border-radius:20px; background:#2a2a3a; border:1px solid #ffaa66; display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; }
+        .block-option.active { background:#ffaa66; color:#000; }
+        .ui { position:absolute; bottom:20px; left:0; right:0; display:flex; flex-direction:column; align-items:center; pointer-events:none; z-index:10; }
+        .touch-panel { background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border-radius:60px; padding:8px 16px; margin:5px; display:flex; gap:12px; pointer-events:auto; flex-wrap:wrap; justify-content:center; }
+        .touch-btn { background:#ffaa66; border:none; color:#000; font-weight:bold; padding:10px 20px; border-radius:40px; font-family:monospace; font-size:14px; cursor:pointer; }
+        .touch-btn.secondary { background:#2a2a3a; color:#ffaa66; border:1px solid #ffaa66; }
+        .touch-btn.active { background:#ff8844; }
+        .joystick-area { position:absolute; bottom:100px; left:20px; width:120px; height:120px; background:rgba(0,0,0,0.5); border-radius:60px; pointer-events:auto; touch-action:none; z-index:15; }
+        .look-area { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:auto; touch-action:none; z-index:5; }
+        #start { position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:auto; z-index:100; }
+        #start h1 { color:#ffaa66; font-size:28px; margin-bottom:15px; text-align:center; }
+        #start p { color:#aaa; margin:8px 0; font-size:12px; text-align:center; max-width:300px; }
+        #startBtn { background:linear-gradient(135deg,#ffaa66,#ff8844); border:none; color:#000; padding:15px 40px; border-radius:30px; cursor:pointer; font-size:18px; font-weight:bold; margin-top:20px; }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div class="stats" id="stats">Loading...</div>
+<div class="block-select" id="blockSelect">
+    <div class="block-option" data-block="2">🌿</div>
+    <div class="block-option" data-block="3">🪨</div>
+    <div class="block-option" data-block="4">💰</div>
+    <div class="block-option" data-block="5">❤️</div>
+    <div class="block-option" data-block="6">⚖️</div>
+</div>
+<div class="ui">
+    <div class="touch-panel">
+        <button class="touch-btn" id="jumpBtn">JUMP</button>
+        <button class="touch-btn" id="sprintBtn">SPRINT</button>
+        <button class="touch-btn secondary active" id="breakBtn">🔨</button>
+        <button class="touch-btn secondary" id="placeBtn">🛠️</button>
+    </div>
+</div>
+<div class="joystick-area" id="joystickArea"></div>
+<div class="look-area" id="lookArea"></div>
+
+<div id="start">
+    <h1>📱 SOULVERSE VOXEL MOBILE</h1>
+    <p>Touch-optimized voxel building game</p>
+    <p style="margin-top:15px;color:#ffaa66">CONTROLS:</p>
+    <p>🕹️ Left stick = Move | Drag right = Look</p>
+    <p>🔨 Tap = Break/Place | Buttons = Jump/Sprint</p>
+    <button id="startBtn">▶️ TAP TO PLAY</button>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.128.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    const RENDER_DIST = 4, CHUNK_SIZE = 16;
+    const BLOCK_TYPES = { AIR:0, DIRT:1, GRASS:2, STONE:3, PROFIT:4, LOVE:5, TAX:6 };
+    const BLOCK_COLORS = [0x000000, 0x8B5A2B, 0x7CB518, 0x808080, 0xffaa44, 0xff88aa, 0x88aaff];
+
+    let scene, camera, renderer;
+    let chunkData = new Map(), chunkMeshes = new Map();
+    let player = { x:0, y:10, z:0, vY:0, onGround:true };
+    let moveVec = { x:0, z:0 }, isSprinting = false, breakMode = true, selectedBlock = BLOCK_TYPES.GRASS;
+    let plt = { profit:100, love:100, tax:100 };
+    let joystickActive = false, joystickCenter = { x:0, y:0 };
+    let lookActive = false, lastTouchX = 0, lastTouchY = 0;
+    let cameraRotation = { y:0, x:0 }, jumpRequested = false, lastInteraction = 0;
+
+    function getBlockType(wx, wy, wz) {
+        const h = 10 + Math.sin(wx*0.1)*Math.cos(wz*0.1)*3 + Math.sin(wx*0.05)*1.5;
+        if (wy > Math.floor(h)) return BLOCK_TYPES.AIR;
+        const biome = Math.sin(wx*0.05)*Math.cos(wz*0.05);
+        if (wy === Math.floor(h)) return biome > 0.3 ? BLOCK_TYPES.PROFIT : biome < -0.3 ? BLOCK_TYPES.LOVE : BLOCK_TYPES.GRASS;
+        if (wy > h-3) return BLOCK_TYPES.DIRT;
+        return BLOCK_TYPES.STONE;
+    }
+
+    function generateChunk(cx, cz) {
+        const blocks = new Array(CHUNK_SIZE*CHUNK_SIZE*CHUNK_SIZE).fill(0);
+        for (let x=0;x<CHUNK_SIZE;x++) for (let z=0;z<CHUNK_SIZE;z++) {
+            const wx = cx*CHUNK_SIZE + x, wz = cz*CHUNK_SIZE + z;
+            for (let y=0;y<CHUNK_SIZE;y++) { const type = getBlockType(wx, y, wz); if (type !== BLOCK_TYPES.AIR) blocks[y*CHUNK_SIZE*CHUNK_SIZE + z*CHUNK_SIZE + x] = type; }
+        }
+        return blocks;
+    }
+
+    function buildChunkMesh(cx, cz) {
+        const blocks = chunkData.get(`${cx},${cz}`); if (!blocks) return null;
+        const geom = new THREE.BufferGeometry(), positions = [], colors = [], indices = [];
+        const addCube = (x,y,z,type) => {
+            const v = (a,b,c) => new THREE.Vector3(x+a, y+b, z+c), col = new THREE.Color(BLOCK_COLORS[type]);
+            const face = (a,b,c,d) => { const s = positions.length/3; [a,b,c,d].forEach(p => { positions.push(p.x,p.y,p.z); colors.push(col.r,col.g,col.b); }); indices.push(s,s+1,s+2, s+2,s+3,s); };
+            face(v(0,0,0), v(1,0,0), v(1,1,0), v(0,1,0)); face(v(0,0,1), v(1,0,1), v(1,1,1), v(0,1,1));
+            face(v(0,0,0), v(1,0,0), v(1,0,1), v(0,0,1)); face(v(0,1,0), v(1,1,0), v(1,1,1), v(0,1,1));
+            face(v(0,0,0), v(0,1,0), v(0,1,1), v(0,0,1)); face(v(1,0,0), v(1,1,0), v(1,1,1), v(1,0,1));
+        };
+        for (let x=0;x<CHUNK_SIZE;x++) for (let z=0;z<CHUNK_SIZE;z++) for (let y=0;y<CHUNK_SIZE;y++) { const idx = y*CHUNK_SIZE*CHUNK_SIZE + z*CHUNK_SIZE + x; if (blocks[idx] !== BLOCK_TYPES.AIR) addCube(x, y, z, blocks[idx]); }
+        geom.setAttribute('position', new Float32Array(positions), 3); geom.setAttribute('color', new Float32Array(colors), 3); geom.setIndex(indices); geom.computeVertexNormals();
+        const mesh = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ vertexColors:true })); mesh.position.set(cx*CHUNK_SIZE, 0, cz*CHUNK_SIZE); return mesh;
+    }
+
+    function rebuildChunkMesh(cx, cz) { const key = `${cx},${cz}`; const old = chunkMeshes.get(key); if (old) scene.remove(old); const mesh = buildChunkMesh(cx, cz); if (mesh) { scene.add(mesh); chunkMeshes.set(key, mesh); } else chunkMeshes.delete(key); }
+
+    function updateChunks() {
+        const cx = Math.floor(player.x/CHUNK_SIZE), cz = Math.floor(player.z/CHUNK_SIZE);
+        for (let dx=-RENDER_DIST;dx<=RENDER_DIST;dx++) for (let dz=-RENDER_DIST;dz<=RENDER_DIST;dz++) {
+            const key = `${cx+dx},${cz+dz}`; if (!chunkData.has(key)) { chunkData.set(key, generateChunk(cx+dx, cz+dz)); const mesh = buildChunkMesh(cx+dx, cz+dz); if (mesh) { scene.add(mesh); chunkMeshes.set(key, mesh); } } else if (!chunkMeshes.has(key)) { const mesh = buildChunkMesh(cx+dx, cz+dz); if (mesh) { scene.add(mesh); chunkMeshes.set(key, mesh); } }
+        }
+        for (let [key, mesh] of chunkMeshes) { const [cxk, czk] = key.split(',').map(Number); if (Math.abs(cxk-cx) > RENDER_DIST+1 || Math.abs(czk-cz) > RENDER_DIST+1) { scene.remove(mesh); chunkMeshes.delete(key); } }
+        document.getElementById('stats').innerText = `💰${Math.floor(plt.profit)} ❤️${Math.floor(plt.love)} ⚖️${Math.floor(plt.tax)} | Chunks:${chunkMeshes.size}`;
+    }
+
+    function updateMovement(delta) {
+        const speed = isSprinting ? 6 : 3;
+        const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
+        const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
+        player.x += (forward.x * -moveVec.z + right.x * moveVec.x) * speed * delta;
+        player.z += (forward.z * -moveVec.z + right.z * moveVec.x) * speed * delta;
+        if (player.onGround && jumpRequested) { player.vY = 5; player.onGround = false; jumpRequested = false; }
+        player.vY -= 15 * delta; player.y += player.vY * delta;
+        if (player.y <= 10) { player.y = 10; player.vY = 0; player.onGround = true; }
+    }
+
+    let raycaster = new THREE.Raycaster();
+    function handleBlockTap() {
+        if (Date.now() - lastInteraction < 200) return;
+        const dir = new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion);
+        raycaster.set(camera.position, dir); raycaster.far = 6;
+        const hits = raycaster.intersectObjects(Array.from(chunkMeshes.values())); if (hits.length === 0) return;
+        const hit = hits[0], point = hit.point, normal = hit.face.normal;
+        let bp = { x:Math.floor(point.x - normal.x*0.5), y:Math.floor(point.y - normal.y*0.5), z:Math.floor(point.z - normal.z*0.5) };
+        const cx = Math.floor(bp.x/CHUNK_SIZE), cz = Math.floor(bp.z/CHUNK_SIZE), lx = bp.x - cx*CHUNK_SIZE, ly = bp.y, lz = bp.z - cz*CHUNK_SIZE;
+        if (ly<0 || ly>=CHUNK_SIZE) return;
+        const blocks = chunkData.get(`${cx},${cz}`); if (!blocks) return;
+        const idx = ly*CHUNK_SIZE*CHUNK_SIZE + lz*CHUNK_SIZE + lx;
+        if (breakMode && blocks[idx] !== BLOCK_TYPES.AIR) {
+            if (blocks[idx] === BLOCK_TYPES.PROFIT) plt.profit = Math.min(100, plt.profit+2);
+            if (blocks[idx] === BLOCK_TYPES.LOVE) plt.love = Math.min(100, plt.love+2);
+            if (blocks[idx] === BLOCK_TYPES.TAX) plt.tax = Math.min(100, plt.tax+2);
+            blocks[idx] = BLOCK_TYPES.AIR; rebuildChunkMesh(cx, cz);
+        } else if (!breakMode) {
+            let pp = { x:Math.floor(point.x + normal.x*0.5), y:Math.floor(point.y + normal.y*0.5), z:Math.floor(point.z + normal.z*0.5) };
+            const pcx = Math.floor(pp.x/CHUNK_SIZE), pcz = Math.floor(pp.z/CHUNK_SIZE), plx = pp.x - pcx*CHUNK_SIZE, ply = pp.y, plz = pp.z - pcz*CHUNK_SIZE;
+            if (ply>=0 && ply<CHUNK_SIZE) { const b = chunkData.get(`${pcx},${pcz}`); if (b && b[ply*CHUNK_SIZE*CHUNK_SIZE + plz*CHUNK_SIZE + plx] === BLOCK_TYPES.AIR) {
+                let cost = selectedBlock===BLOCK_TYPES.PROFIT||selectedBlock===BLOCK_TYPES.LOVE||selectedBlock===BLOCK_TYPES.TAX ? 5 : 0;
+                if (cost===0 || (selectedBlock===BLOCK_TYPES.PROFIT&&plt.profit>=cost) || (selectedBlock===BLOCK_TYPES.LOVE&&plt.love>=cost) || (selectedBlock===BLOCK_TYPES.TAX&&plt.tax>=cost)) {
+                    if (cost>0) { if (selectedBlock===BLOCK_TYPES.PROFIT) plt.profit-=cost; if (selectedBlock===BLOCK_TYPES.LOVE) plt.love-=cost; if (selectedBlock===BLOCK_TYPES.TAX) plt.tax-=cost; }
+                    b[ply*CHUNK_SIZE*CHUNK_SIZE + plz*CHUNK_SIZE + plx] = selectedBlock; rebuildChunkMesh(pcx, pcz);
+                }
+            }}
+        }
+        lastInteraction = Date.now();
+    }
+
+    function initGraphics() {
+        scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 200); camera.position.set(0, 2, 5);
+        renderer = new THREE.WebGLRenderer({ canvas:document.getElementById('gameCanvas'), antialias:true }); renderer.setSize(window.innerWidth, window.innerHeight);
+        scene.add(new THREE.AmbientLight(0x404060, 0.6));
+        const sun = new THREE.DirectionalLight(0xffdd99, 1.0); sun.position.set(5, 10, 3); sun.castShadow = true; sun.shadow.mapSize.width = 512; sun.shadow.mapSize.height = 512; scene.add(sun);
+        scene.add(new THREE.PointLight(0xccaa88, 0.4, 0, 5));
+        const water = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshLambertMaterial({ color:0x3399ff, transparent:true, opacity:0.6 })); water.rotation.x = -Math.PI/2; water.position.y = 0.05; scene.add(water);
+        const pGeo = new THREE.BufferGeometry(), pPos = new Float32Array(800*3); for(let i=0;i<800;i++){ pPos[i*3]=(Math.random()-0.5)*80; pPos[i*3+1]=Math.random()*15; pPos[i*3+2]=(Math.random()-0.5)*80; }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3)); scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({ color:0x88aaff, size:0.08 })));
+        const gMat = new THREE.MeshLambertMaterial({ color:0x88aa44 }); for(let i=0;i<800;i++){ const x=(Math.random()-0.5)*80, z=(Math.random()-0.5)*80, y=10+Math.sin(x*0.2)*Math.cos(z*0.2)*3; if(y<20){ const g=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.3,0.1),gMat); g.position.set(x,y,z); scene.add(g); }}
+    }
+
+    function setupTouchControls() {
+        const joystickDiv = document.getElementById('joystickArea');
+        const knob = document.createElement('div'); knob.style.cssText = 'width:50px;height:50px;border-radius:25px;background:#ffaa66;position:absolute;left:35px;top:35px;opacity:0.7;';
+        joystickDiv.appendChild(knob);
+        joystickDiv.addEventListener('touchstart', (e) => { e.preventDefault(); const rect = joystickDiv.getBoundingClientRect(), touch = e.touches[0]; joystickActive = true; joystickCenter.x = rect.left + rect.width/2; joystickCenter.y = rect.top + rect.height/2; updateJoystick(touch.clientX, touch.clientY, knob); });
+        joystickDiv.addEventListener('touchmove', (e) => { e.preventDefault(); updateJoystick(e.touches[0].clientX, e.touches[0].clientY, knob); });
+        joystickDiv.addEventListener('touchend', () => { joystickActive = false; moveVec.x = 0; moveVec.z = 0; knob.style.left = '35px'; knob.style.top = '35px'; });
+        function updateJoystick(clientX, clientY, knobEl) { if (!joystickActive) return; let dx = clientX - joystickCenter.x, dy = clientY - joystickCenter.y; const maxDist = 50, dist = Math.min(maxDist, Math.hypot(dx, dy)), angle = Math.atan2(dy, dx), lx = Math.cos(angle) * dist, ly = Math.sin(angle) * dist; knobEl.style.left = (35 + lx) + 'px'; knobEl.style.top = (35 + ly) + 'px'; moveVec.x = lx / maxDist; moveVec.z = ly / maxDist; }
+        const lookDiv = document.getElementById('lookArea');
+        lookDiv.addEventListener('touchstart', (e) => { e.preventDefault(); lookActive = true; lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY; });
+        lookDiv.addEventListener('touchmove', (e) => { if (!lookActive) return; e.preventDefault(); const dx = e.touches[0].clientX - lastTouchX, dy = e.touches[0].clientY - lastTouchY; cameraRotation.y -= dx * 0.005; cameraRotation.x -= dy * 0.005; cameraRotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotation.x)); camera.rotation.order = 'YXZ'; camera.rotation.y = cameraRotation.y; camera.rotation.x = cameraRotation.x; lastTouchX = e.touches[0].clientX; lastTouchY = e.touches[0].clientY; });
+        lookDiv.addEventListener('touchend', () => { lookActive = false; });
+        document.getElementById('gameCanvas').addEventListener('touchstart', (e) => { if (e.target.id !== 'gameCanvas') return; e.preventDefault(); handleBlockTap(); });
+    }
+
+    function setupUI() {
+        document.getElementById('jumpBtn').addEventListener('touchstart', (e) => { e.preventDefault(); jumpRequested = true; });
+        document.getElementById('sprintBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isSprinting = !isSprinting; e.target.style.background = isSprinting ? '#ff8844' : '#ffaa66'; });
+        document.getElementById('breakBtn').addEventListener('touchstart', (e) => { e.preventDefault(); breakMode = true; document.getElementById('breakBtn').classList.add('active'); document.getElementById('placeBtn').classList.remove('active'); });
+        document.getElementById('placeBtn').addEventListener('touchstart', (e) => { e.preventDefault(); breakMode = false; document.getElementById('placeBtn').classList.add('active'); document.getElementById('breakBtn').classList.remove('active'); });
+        document.querySelectorAll('.block-option').forEach(opt => { opt.addEventListener('click', () => { selectedBlock = parseInt(opt.dataset.block); document.querySelectorAll('.block-option').forEach(o => o.classList.remove('active')); opt.classList.add('active'); }); });
+        document.querySelector('.block-option[data-block="2"]').classList.add('active');
+    }
+
+    let lastFrame = 0;
+    function animate() {
+        const now = performance.now(), delta = Math.min(0.033, (now - lastFrame) / 1000); lastFrame = now;
+        updateMovement(delta); updateChunks();
+        camera.position.x = player.x; camera.position.y = player.y + 1.6; camera.position.z = player.z;
+        plt.profit = Math.min(100, plt.profit + 0.3 * delta); plt.love = Math.min(100, plt.love + 0.3 * delta); plt.tax = Math.min(100, plt.tax + 0.3 * delta);
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+    }
+
+    function init() {
+        initGraphics(); setupTouchControls(); setupUI(); updateChunks();
+        document.getElementById('startBtn').addEventListener('click', () => { document.getElementById('start').style.display = 'none'; });
+        animate();
+    }
+    init();
+</script>
+</body>
+</html>
